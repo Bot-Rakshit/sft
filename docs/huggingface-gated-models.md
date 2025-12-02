@@ -36,6 +36,7 @@ Follow these steps to grant instant access to the `aicrowd` account:
 1. Go to your model’s settings page on Hugging Face.
 2. Under **Settings**, enable **Access Requests** if not already enabled.
 3. Click **Add Access**, search for **aicrowd**, select the account, and click **Grant Access**.
+   For reference, here is the [AIcrowd account on Hugging Face](https://huggingface.co/aicrowd). 
 
 > **Note:** This process grants access to the `aicrowd` account **instantaneously**.
 ---
