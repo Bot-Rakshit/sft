@@ -93,6 +93,23 @@ class OpenAIEndpointAgent(ChessAgent):
     the OpenAI chat completions API format.
     """
     
+    # Unicode chess piece characters (same as openai_agent.py)
+    UNICODE_PIECES = {
+        'P': '♙',  # White pawn
+        'R': '♖',  # White rook
+        'N': '♘',  # White knight
+        'B': '♗',  # White bishop
+        'Q': '♕',  # White queen
+        'K': '♔',  # White king
+        
+        'p': '♟',  # Black pawn
+        'r': '♜',  # Black rook
+        'n': '♞',  # Black knight
+        'b': '♝',  # Black bishop
+        'q': '♛',  # Black queen
+        'k': '♚',  # Black king
+    }
+    
     def __init__(self, base_url: str, api_key: str = "dummy", max_retries: int = 2, model: str = "aicrowd-chess-model", 
                  template_file: Optional[str] = None, debug: bool = False):
         """
@@ -116,29 +133,175 @@ class OpenAIEndpointAgent(ChessAgent):
         self.renderer = ChessRenderer(show_coordinates=True, show_move_numbers=False, 
                                       empty_square_char="·", use_rich=False)
     
+    def _render_board_unicode(self, board: chess.Board) -> str:
+        """
+        Render the chess board using Unicode chess pieces.
+        
+        Args:
+            board: The chess board to render
+            
+        Returns:
+            String representation of the board with Unicode pieces
+        """
+        lines = []
+        
+        # Board coordinates
+        files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
+        
+        # Add top coordinate line with proper alignment
+        # Each square is 3 characters wide, so we need to center each letter
+        coord_parts = []
+        for file in files:
+            coord_parts.append(f" {file} ")  # 3-character spacing to match board squares
+        coord_line = "   " + "".join(coord_parts) + "  "
+        lines.append(coord_line)
+        # Calculate border width: 8 squares × 3 characters each = 24 characters
+        border_width = len(files) * 3
+        lines.append("   +" + "-" * border_width + "+")
+        
+        # Render board squares
+        for rank_idx, rank in enumerate(ranks):
+            line_parts = []
+            
+            # Add rank coordinate
+            line_parts.append(f"{rank} |")
+            
+            # Add squares
+            for file_idx, file in enumerate(files):
+                square = chess.parse_square(file + rank)
+                piece = board.piece_at(square)
+                
+                # Get piece symbol or empty square character
+                if piece is None:
+                    piece_char = "·"  # Empty square
+                else:
+                    piece_char = self.UNICODE_PIECES[piece.symbol()]
+                
+                # Format square
+                square_str = f" {piece_char} "
+                line_parts.append(square_str)
+            
+            # Add closing coordinate
+            line_parts.append(f"| {rank}")
+            lines.append("".join(line_parts))
+        
+        # Add bottom coordinate line
+        lines.append("   +" + "-" * border_width + "+")
+        coord_line = "   " + "".join(coord_parts) + "  "
+        lines.append(coord_line)
+        
+        return "\n".join(lines)
+    
+    def _build_prompt_context(
+        self,
+        board: chess.Board,
+        legal_moves: List[chess.Move],
+        move_history: List[str],
+        side_to_move: str,
+    ) -> dict:
+        """
+        Build the context dictionary for Jinja2 template rendering.
+        
+        Args:
+            board: Current chess board state
+            legal_moves: List of legal moves available
+            move_history: List of moves played so far (in UCI notation)
+            side_to_move: Which side is to move ('White' or 'Black')
+            
+        Returns:
+            Dictionary with all template variables (both string and list forms)
+        """
+        # Get FEN representation
+        fen = board.fen()
+        
+        # Get UTF board representation with Unicode chess pieces
+        board_utf = self._render_board_unicode(board)
+        
+        # Get ASCII board representation
+        board_ascii = board.unicode()
+        
+        # Get last move description
+        if board.move_stack:
+            last_move = board.move_stack[-1]
+            # We need to get the SAN before the move was made
+            # Create a temporary board to get the SAN
+            temp_board = chess.Board()
+            for move in board.move_stack[:-1]:
+                temp_board.push(move)
+            last_move_san = temp_board.san(last_move)
+            last_side = "Black" if board.turn else "White"
+            last_move_desc = f"{last_side} played {last_move_san}"
+        else:
+            last_move_desc = "(start of game)"
+        
+        # Format legal moves as both UCI and SAN lists
+        legal_moves_uci_list = [move.uci() for move in legal_moves]
+        legal_moves_san_list = [board.san(move) for move in legal_moves]
+        legal_moves_uci_str = " ".join(legal_moves_uci_list)
+        legal_moves_san_str = " ".join(legal_moves_san_list)
+        
+        # Format move history as both UCI and SAN
+        if move_history:
+            # Move history is already in UCI format
+            move_history_uci_list = list(move_history)
+            move_history_uci_str = " ".join(move_history_uci_list)
+            
+            # Convert UCI moves to SAN if possible
+            try:
+                history_board = chess.Board()
+                move_history_san_list = []
+                for uci_move in move_history:
+                    try:
+                        move = chess.Move.from_uci(uci_move)
+                        san = history_board.san(move)
+                        move_history_san_list.append(san)
+                        history_board.push(move)
+                    except Exception:
+                        move_history_san_list.append(uci_move)
+                
+                move_history_san_str = " ".join(move_history_san_list)
+            except Exception:
+                move_history_san_list = list(move_history)
+                move_history_san_str = " ".join(move_history)
+        else:
+            move_history_uci_list = []
+            move_history_san_list = []
+            move_history_uci_str = "(no moves yet)"
+            move_history_san_str = "(no moves yet)"
+        
+        # Get first legal move as an example
+        first_legal_move = legal_moves_uci_list[0] if legal_moves_uci_list else ""
+        
+        # Build and return the context dictionary
+        return {
+            "board_utf": board_utf,
+            "board_ascii": board_ascii,
+            "FEN": fen,
+            "side_to_move": side_to_move,
+            "last_move": last_move_desc,
+            "legal_moves_uci": legal_moves_uci_str,
+            "legal_moves_san": legal_moves_san_str,
+            "move_history_uci": move_history_uci_str,
+            "move_history_san": move_history_san_str,
+            "legal_moves_uci_list": legal_moves_uci_list,
+            "legal_moves_san_list": legal_moves_san_list,
+            "move_history_uci_list": move_history_uci_list,
+            "move_history_san_list": move_history_san_list,
+            "first_legal_move": first_legal_move,
+        }
+    
     def _format_prompt(self, board: chess.Board, legal_moves: List[chess.Move], 
                       move_history: List[str], side_to_move: str) -> str:
         """Format the prompt for the API call."""
-        legal_moves_uci = " ".join(move.uci() for move in legal_moves)
-        legal_moves_san = [board.san(move) for move in legal_moves]
+        # Build the context using the shared method (same as openai_agent.py)
+        context = self._build_prompt_context(board, legal_moves, move_history, side_to_move)
         
-        # Get last move
-        last_move = move_history[-1] if move_history else "None"
-        
-        # Generate board ASCII representation using the custom renderer
-        board_ascii = self.renderer.render_board(board, output_mode="string")
-
         # If template file is specified, use it
         if self.template_file:
             prompt = render_template(
                 self.template_file,
-                FEN=board.fen(),
-                legal_moves_uci=legal_moves_uci,
-                legal_moves_san=legal_moves_san,
-                side_to_move=side_to_move,
-                last_move=last_move,
-                move_history=move_history,
-                board_ascii=board_ascii
+                **context
             )
         else:
             raise FileNotFoundError(f"Template file not found: {self.template_file}")

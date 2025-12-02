@@ -73,6 +73,12 @@ Please follow the instructions in [player_agents/README.md](player_agents/README
     cd global-chess-challenge-2025-starter-kit
     ```
 
+In case you didn't clone with `--recursive`, you can do the following
+    ```bash
+    cd global-chess-challenge-2025-starter-kit
+    git submodule update --init --recursive
+    ```
+
 **Install** competition specific dependencies
     ```bash
     pip install -r requirements.txt
@@ -85,6 +91,7 @@ Before running local evaluation, you need to start either a vLLM server or a Fla
 ### Option 1: Using vLLM (for LLM-based agents)
 ```bash
 cd player_agents
+pip install vllm
 bash run_vllm.sh
 ```
 
