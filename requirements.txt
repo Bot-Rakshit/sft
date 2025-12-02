@@ -1,3 +1,4 @@
+aicrowd-cli
 python-chess
 flask
 openai>=1.0.0

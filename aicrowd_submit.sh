@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# aicrowd login
+aicrowd login
 
 # Configuration variables
 CHALLENGE="global-chess-challenge-2025"
