@@ -1,12 +1,9 @@
-MODEL_NAME_OR_PATH="Qwen/Qwen3-0.6B"
-# MODEL_NAME_OR_PATH="<path/to/your/saved_sft_model>"
+#!/bin/bash
+set -euo pipefail
 
-vllm serve $MODEL_NAME_OR_PATH \
-    --served-model-name aicrowd-chess-model \
-    --dtype bfloat16 \
-    --trust-remote-code \
-    --gpu-memory-utilization 0.9 \
-    --enforce-eager \
-    --disable-log-stats \
-    --host 0.0.0.0 \
-    --port 5000
+# Fallback wrapper: instead of vLLM, run the transformers Flask server.
+# Dependencies are assumed preinstalled via requirements.txt.
+
+MODEL_NAME="bot-rakshit/qwen-chess-0.5b-sft-v1"
+echo "Starting transformers agent (vllm fallback) with model ${MODEL_NAME} on port 5000"
+python3 player_agents/transformers_agent_flask_server.py --model "$MODEL_NAME" --port 5000

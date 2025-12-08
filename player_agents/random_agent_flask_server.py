@@ -1,5 +1,6 @@
 import random
 import argparse
+import sys
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -24,11 +25,13 @@ def chat_completions():
         if not user_message:
             return jsonify({"error": "No user message found"}), 400
         
+        print(f"DEBUG: Received message: {user_message[:100]}...", file=sys.stderr)
+
         # Parse the message to extract legal moves
         legal_moves = []
         if 'legal moves:' in user_message.lower():
             # Extract the legal moves portion
-            parts = user_message.split('legal moves:')
+            parts = user_message.lower().split('legal moves:')
             if len(parts) > 1:
                 moves_part = parts[1].strip()
                 # Split by spaces to get individual moves
