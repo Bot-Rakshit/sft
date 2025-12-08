@@ -20,7 +20,14 @@ def train(args):
 
     dataset = load_dataset("json", data_files=data_file, split="train")
 
-    dtype = torch.bfloat16 if (torch.cuda.is_available() or torch.backends.mps.is_available()) else torch.float32
+    if args.dtype == "auto":
+        dtype = torch.bfloat16 if (torch.cuda.is_available() or torch.backends.mps.is_available()) else torch.float32
+    elif args.dtype == "bfloat16":
+        dtype = torch.bfloat16
+    elif args.dtype == "float16":
+        dtype = torch.float16
+    else:
+        dtype = torch.float32
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=dtype,
@@ -47,7 +54,7 @@ def train(args):
         bf16=dtype == torch.bfloat16,
         report_to="none",
         warmup_ratio=0.03,
-        gradient_checkpointing=True,
+        gradient_checkpointing=args.gradient_checkpointing,
     )
 
     trainer = SFTTrainer(
@@ -78,6 +85,8 @@ def parse_args():
     parser.add_argument("--max-seq-length", type=int, default=512, help="Maximum sequence length")
     parser.add_argument("--lora-r", type=int, default=16, help="LoRA rank")
     parser.add_argument("--lora-alpha", type=int, default=32, help="LoRA alpha")
+    parser.add_argument("--gradient-checkpointing", action=argparse.BooleanOptionalAction, default=True, help="Enable/disable gradient checkpointing")
+    parser.add_argument("--dtype", type=str, choices=["auto", "bfloat16", "float16", "float32"], default="auto", help="Torch dtype to use for model")
     return parser.parse_args()
 
 
