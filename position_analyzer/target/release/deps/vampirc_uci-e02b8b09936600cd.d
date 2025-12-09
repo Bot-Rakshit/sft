@@ -1,0 +1,10 @@
+/Users/rakshit/workspace/repos/chess/global-chess-challenge-2025-starter-kit/position_analyzer/target/release/deps/vampirc_uci-e02b8b09936600cd.d: /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/lib.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/uci.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/parser.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/../res/uci.pest
+
+/Users/rakshit/workspace/repos/chess/global-chess-challenge-2025-starter-kit/position_analyzer/target/release/deps/libvampirc_uci-e02b8b09936600cd.rlib: /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/lib.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/uci.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/parser.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/../res/uci.pest
+
+/Users/rakshit/workspace/repos/chess/global-chess-challenge-2025-starter-kit/position_analyzer/target/release/deps/libvampirc_uci-e02b8b09936600cd.rmeta: /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/lib.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/uci.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/parser.rs /Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/../res/uci.pest
+
+/Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/lib.rs:
+/Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/uci.rs:
+/Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/parser.rs:
+/Users/rakshit/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/vampirc-uci-0.11.1/src/../res/uci.pest:

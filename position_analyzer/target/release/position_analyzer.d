@@ -1,0 +1,1 @@
+/Users/rakshit/workspace/repos/chess/global-chess-challenge-2025-starter-kit/position_analyzer/target/release/position_analyzer: /Users/rakshit/workspace/repos/chess/global-chess-challenge-2025-starter-kit/position_analyzer/src/main.rs
