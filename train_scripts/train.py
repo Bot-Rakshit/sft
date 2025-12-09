@@ -32,6 +32,7 @@ def train(args):
         model_name,
         torch_dtype=dtype,
         device_map="auto",
+        attn_implementation="flash_attention_2" if args.use_flash_attn else "eager",
     )
 
     peft_config = LoraConfig(
@@ -87,6 +88,7 @@ def parse_args():
     parser.add_argument("--lora-alpha", type=int, default=32, help="LoRA alpha")
     parser.add_argument("--gradient-checkpointing", action=argparse.BooleanOptionalAction, default=True, help="Enable/disable gradient checkpointing")
     parser.add_argument("--dtype", type=str, choices=["auto", "bfloat16", "float16", "float32"], default="auto", help="Torch dtype to use for model")
+    parser.add_argument("--use-flash-attn", action="store_true", default=False, help="Use Flash Attention 2 for faster training")
     return parser.parse_args()
 
 
