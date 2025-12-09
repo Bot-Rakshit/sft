@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Model Tester (React)</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; }
+    #app { display: flex; width: 100%; }
+    .panel { padding: 12px; box-sizing: border-box; }
+    .left { width: 360px; border-right: 1px solid #ddd; overflow-y: auto; }
+    .right { flex: 1; overflow-y: auto; }
+    .board { display: grid; grid-template-columns: repeat(8, 40px); grid-template-rows: repeat(8, 40px); border: 1px solid #333; margin-bottom: 8px; }
+    .sq { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .light { background: #f0d9b5; }
+    .dark { background: #b58863; }
+    .row-labels, .col-labels { font-size: 12px; color: #555; }
+    .section { margin-bottom: 12px; }
+    textarea { width: 100%; min-height: 100px; font-family: monospace; }
+    input, button, select { margin: 4px 0; width: 100%; box-sizing: border-box; }
+    .log { font-family: monospace; white-space: pre-wrap; background: #f6f6f6; padding: 8px; border: 1px solid #ddd; height: 180px; overflow: auto; }
+    .flex { display: flex; gap: 8px; }
+    .half { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="module">
+    import React, { useEffect, useMemo, useState } from "https://esm.sh/react@18.2.0";
+    import { createRoot } from "https://esm.sh/react-dom@18.2.0/client";
+    import { Chess } from "https://esm.sh/chess.js@1.0.0";
+
+    const pieceToGlyph = {
+      p: "♟", r: "♜", n: "♞", b: "♝", q: "♛", k: "♚",
+      P: "♙", R: "♖", N: "♘", B: "♗", Q: "♕", K: "♔",
+    };
+
+    function Board({ fen }) {
+      const squares = useMemo(() => {
+        const board = new Chess(fen);
+        const arr = [];
+        for (let rank = 7; rank >= 0; rank--) {
+          for (let file = 0; file < 8; file++) {
+            const idx = rank * 8 + file;
+            const sqName = "abcdefgh"[file] + (rank + 1);
+            const piece = board.get(sqName);
+            const isLight = (rank + file) % 2 === 0;
+            arr.push({ sq: sqName, glyph: piece ? pieceToGlyph[piece.type === piece.type.toLowerCase() ? piece.type : piece.type.toUpperCase()] : "", isLight });
+          }
+        }
+        return arr;
+      }, [fen]);
+
+      return (
+        <div className="board">
+          {squares.map((s) => (
+            <div key={s.sq} className={`sq ${s.isLight ? "light" : "dark"}`} title={s.sq}>
+              {s.glyph}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function App() {
+      const [chess] = useState(() => new Chess());
+      const [fen, setFen] = useState(chess.fen());
+      const [endpoint, setEndpoint] = useState("http://localhost:5000/v1");
+      const [model, setModel] = useState("chess-agent");
+      const [temperature, setTemperature] = useState(0.0);
+      const [maxTokens, setMaxTokens] = useState(64);
+      const [reqLog, setReqLog] = useState("");
+      const [respLog, setRespLog] = useState("");
+      const [status, setStatus] = useState("");
+      const [userMove, setUserMove] = useState("");
+
+      const legalMoves = useMemo(() => chess.moves({ verbose: true }), [fen, chess]);
+
+      const prompt = useMemo(() => {
+        const lmUci = legalMoves.map((m) => m.from + m.to + (m.promotion || "")).join(" ");
+        const boardAscii = chess.ascii();
+        return (
+          `You are an expert chess player. Here is the position in FEN format:\n${chess.fen()}\n\n` +
+          `Legal moves: ${lmUci}\n\n` +
+          `Board looks like this right now\n${boardAscii}\n\n` +
+          `Select the best move. Keep your thinking to 2 sentences or less, then output your chosen move.\n\n` +
+          `CRITICAL: Your UCI move must always be one of the moves from legal_moves_uci. With no spaces in between.\n\n` +
+          `Format:\n<think>brief thinking (2 sentences max)</think>\n<uci_move>your_move</uci_move>`
+        );
+      }, [fen, legalMoves, chess]);
+
+      const doUserMove = () => {
+        try {
+          const mv = chess.move(userMove, { sloppy: true });
+          if (!mv) throw new Error("Illegal");
+          setFen(chess.fen());
+          setUserMove("");
+        } catch (e) {
+          alert("Illegal move");
+        }
+      };
+
+      const requestModelMove = async () => {
+        setStatus("Calling model...");
+        const body = {
+          model,
+          messages: [{ role: "user", content: prompt }],
+          max_tokens: Number(maxTokens),
+          temperature: Number(temperature),
+        };
+        setReqLog(JSON.stringify(body, null, 2));
+        try {
+          const resp = await fetch(`${endpoint}/chat/completions`.replace(/\/v1\/chat/,'/chat').replace(/\/v1$/,'/v1/chat/completions'), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const data = await resp.json();
+          setRespLog(JSON.stringify(data, null, 2));
+          const content = data?.choices?.[0]?.message?.content || "";
+          const match = content.match(/<uci_move>(.*?)<\/uci_move>/i);
+          if (match) {
+            const mv = match[1].trim();
+            const res = chess.move(mv, { sloppy: true });
+            if (res) {
+              setFen(chess.fen());
+              setStatus(`Model played ${mv}`);
+            } else {
+              setStatus(`Model returned illegal move: ${mv}`);
+            }
+          } else {
+            setStatus("No <uci_move> found in response");
+          }
+        } catch (e) {
+          setStatus(`Error: ${e}`);
+        }
+      };
+
+      const resetGame = () => {
+        chess.reset();
+        setFen(chess.fen());
+        setRespLog("");
+        setReqLog("");
+        setStatus("Reset");
+      };
+
+      const undo = () => {
+        chess.undo();
+        setFen(chess.fen());
+      };
+
+      const loadFen = (f) => {
+        try {
+          chess.load(f);
+          setFen(chess.fen());
+        } catch (e) {
+          alert("Invalid FEN");
+        }
+      };
+
+      return (
+        <div id="container" style={{ display: "flex", width: "100%" }}>
+          <div className="panel left">
+            <h3>Settings</h3>
+            <div className="section">
+              <label>Endpoint</label>
+              <input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} />
+              <label>Model</label>
+              <input value={model} onChange={(e) => setModel(e.target.value)} />
+              <label>Temperature</label>
+              <input type="number" step="0.1" value={temperature} onChange={(e) => setTemperature(e.target.value)} />
+              <label>Max tokens</label>
+              <input type="number" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} />
+            </div>
+            <div className="section">
+              <label>FEN</label>
+              <textarea value={fen} onChange={(e) => loadFen(e.target.value)}></textarea>
+              <button onClick={resetGame}>Reset Start</button>
+              <button onClick={undo}>Undo</button>
+            </div>
+            <div className="section">
+              <label>User move (UCI or SAN)</label>
+              <input value={userMove} onChange={(e) => setUserMove(e.target.value)} placeholder="e2e4 or Nf3" />
+              <button onClick={doUserMove}>Play User Move</button>
+            </div>
+            <div className="section">
+              <button onClick={requestModelMove}>Ask Model Move</button>
+              <div>Status: {status}</div>
+            </div>
+          </div>
+          <div className="panel right">
+            <h3>Board</h3>
+            <Board fen={fen} />
+            <div className="section">
+              <h4>Prompt sent to model</h4>
+              <div className="log">{prompt}</div>
+            </div>
+            <div className="flex">
+              <div className="half">
+                <h4>Request (JSON)</h4>
+                <div className="log">{reqLog}</div>
+              </div>
+              <div className="half">
+                <h4>Response</h4>
+                <div className="log">{respLog}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = createRoot(document.getElementById("app"));
+    root.render(<App />);
+  </script>
+</body>
+</html>

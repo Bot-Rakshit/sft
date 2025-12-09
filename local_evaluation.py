@@ -396,11 +396,18 @@ class OpenAIEndpointAgent(ChessAgent):
                     print(content)
                     print(f"{'='*70}\n")
                 
+                # Extract optional <think> reasoning for logging/UI
+                comment = None
+                think_match = re.search(r"<think>(.*?)</think>", content, re.IGNORECASE | re.DOTALL)
+                if think_match:
+                    comment = think_match.group(1).strip()
+
                 # Parse move
                 move = self._parse_move(content, legal_moves)
-                
+
                 if move is not None:
-                    return move, f"API move (attempt {attempt + 1})"
+                    # Return move plus optional human-readable comment
+                    return move, (comment or f"API move (attempt {attempt + 1})")
                 elif attempt < self.max_retries:
                     print(f"Warning: Invalid move on attempt {attempt + 1}, retrying...")
                     continue
@@ -539,7 +546,7 @@ def save_game_log(
     game_result: dict,
     white_acpl: float,
     black_acpl: float,
-    timestamp: str
+    timestamp: str,
 ):
     """
     Save game data to a JSON file in the logs/ directory.
@@ -570,6 +577,8 @@ def save_game_log(
         "result": game_result["result"],
         "moves_played": game_result["moves_played"],
         "move_history": game_result["move_history"],
+        # Optional per-move comments (e.g. LLM <think> reasoning)
+        "move_comments": game_result.get("move_comments", []),
         "player_acpl": player_acpl,
         "opponent_acpl": opponent_acpl,
         "white_acpl": white_acpl,
@@ -596,11 +605,13 @@ def evaluate_against_opponent(
     opponent_agent: ChessAgent,
     num_games: int = 10,
     verbose: bool = False,
-    base_url: str = None,
-    api_key: str = None,
-    max_retries: int = None,
-    template_file: str = None,
-    debug: bool = False
+    base_url: str | None = None,
+    api_key: str | None = None,
+    max_retries: int | None = None,
+    template_file: str | None = None,
+    debug: bool = False,
+    acpl_depth: int = 7,
+    acpl_movetime_ms: int = 1000,
 ) -> EvaluationResults:
     """
     Evaluate player agent against a specific opponent.
@@ -663,7 +674,8 @@ def evaluate_against_opponent(
             black_acpl = 0.0
             if len(game_result["move_history"]) > 0:
                 try:
-                    analyzer = _StockfishAnalyzer(depth=20, movetime_ms=1000)
+                    # Use a strong Stockfish instance for ACPL analysis
+                    analyzer = _StockfishAnalyzer(depth=acpl_depth, movetime_ms=acpl_movetime_ms)
                     acpl_result = analyzer.analyze_game(game_result["move_history"])
                     white_acpl = acpl_result["white_acpl"]
                     black_acpl = acpl_result["black_acpl"]
@@ -872,6 +884,18 @@ def main():
         action="store_true",
         help="Print input prompts and output responses for debugging"
     )
+    parser.add_argument(
+        "--acpl-depth",
+        type=int,
+        default=7,
+        help="Stockfish depth for ACPL analysis (strong engine, default: 7)",
+    )
+    parser.add_argument(
+        "--acpl-movetime-ms",
+        type=int,
+        default=1000,
+        help="Time per ACPL analysis in milliseconds (default: 1000)",
+    )
     
     args = parser.parse_args()
     
@@ -889,6 +913,8 @@ def main():
     print(f"ACPL analysis:       Enabled")
     print(f"Stockfish depth:     {args.stockfish_depth}")
     print(f"Stockfish skill:     {args.stockfish_skill}")
+    print(f"ACPL Stockfish depth:{args.acpl_depth}")
+    print(f"ACPL movetime (ms):  {args.acpl_movetime_ms}")
     print(f"Template file:       {args.template_file if args.template_file else 'Default (built-in)'}")
     print(f"Debug mode:          {'Enabled' if args.debug else 'Disabled'}")
     
@@ -943,7 +969,9 @@ def main():
                 api_key=args.api_key,
                 max_retries=args.max_retries,
                 template_file=args.template_file,
-                debug=args.debug
+                debug=args.debug,
+                acpl_depth=args.acpl_depth,
+                acpl_movetime_ms=args.acpl_movetime_ms,
             )
             return result
         except Exception as e:
