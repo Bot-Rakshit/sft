@@ -62,16 +62,79 @@ Format:
             return None, response
 
 def evaluate_model():
-    base_model = "Qwen/Qwen2.5-0.5B-Instruct"
-    adapter_path = "qwen-chess-0.5b-sft"
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, required=True, help="Path to merged model or adapter")
+    parser.add_argument("--base-model", type=str, default="Qwen/Qwen2.5-0.5B-Instruct", help="Base model name")
+    parser.add_argument("--fen", type=str, help="Single FEN position to test")
+    parser.add_argument("--legal-moves", type=str, help="Comma-separated legal moves")
+    args = parser.parse_args()
     
-    agent = TrainedAgent(adapter_path, base_model)
+    if os.path.exists(os.path.join(args.model, "adapter_config.json")):
+        print("Loading model with adapter...")
+        agent = TrainedAgent(args.model, args.base_model)
+    else:
+        print("Loading merged model directly...")
+        class MergedAgent:
+            def __init__(self, model_path):
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    model_path,
+                    torch_dtype=torch.float16,
+                    device_map="auto"
+                )
+                self.model.eval()
+            
+            def get_move(self, fen, legal_moves):
+                legal_moves_str = " ".join(legal_moves)
+                prompt = f"""You are an expert chess player. Here is the position in FEN format:
+{fen}
+
+Legal moves: {legal_moves_str}
+
+Select the best move. Keep your thinking to 2 sentences or less, then output your chosen move.
+Format:
+<think>brief thinking (2 sentences max)</think>
+<uci_move>your_move</uci_move>"""
+                
+                messages = [{"role": "user", "content": prompt}]
+                text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
+                
+                with torch.no_grad():
+                    outputs = self.model.generate(**inputs, max_new_tokens=100, temperature=0.1, do_sample=True)
+                
+                response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+                if "assistant" in response:
+                    response = response.split("assistant")[-1].strip()
+                
+                import re
+                move_match = re.search(r"<uci_move>(.*?)</uci_move>", response)
+                if move_match:
+                    return move_match.group(1).strip(), response
+                else:
+                    print(f"Failed to parse response: {response}")
+                    return None, response
+        
+        agent = MergedAgent(args.model)
     
-    # Test on a few positions
+    if args.fen and args.legal_moves:
+        board = chess.Board(args.fen)
+        legal_moves = args.legal_moves.split(",")
+        print(f"\nTesting position: {args.fen}")
+        move, raw_response = agent.get_move(args.fen, legal_moves)
+        print(f"Agent Response: {raw_response}")
+        print(f"Selected Move: {move}")
+        if move in legal_moves:
+            print("✅ Legal Move")
+        else:
+            print(f"❌ Illegal Move")
+        return
+    
     test_fens = [
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", # Start
-        "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3", # Spanish Opening
-        "rnbqkb1r/pp2pppp/3p1n2/2p5/2PPP3/2N5/PP3PPP/R1BQKBNR b KQkq - 0 4" # Sicilian
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+        "rnbqkb1r/pp2pppp/3p1n2/2p5/2PPP3/2N5/PP3PPP/R1BQKBNR b KQkq - 0 4"
     ]
     
     print("\n=== Running Local Tests ===")
